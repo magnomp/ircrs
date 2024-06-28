@@ -1,0 +1,11 @@
+[package]
+name = "ircrs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.38.0", features = ["full"] }
+# stdout logging.
+femme = { version = "2.2.1" }
+log = { version = "0.4.20" }
+nom = { version = "7.1.3" }
