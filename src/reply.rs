@@ -12,22 +12,29 @@ pub struct IrcResponse {
 
 #[allow(non_camel_case_types)]
 pub enum IrcResponseCode {
+    RPL_WELCOME,
     ERR_INVALIDCAPCMD,
     ERR_UNKNOWNCOMMAND,
     ERR_NONICKNAMEGIVEN,
     ERR_NEEDMOREPARAMS,
-    // Error condition (mostly misuse of protocol) which I didn't find a mapping on RFC
+    ERR_ALREADYREGISTRED,
+    // Generic error condition (mostly misuse of protocol) which I didn't find a mapping on RFC
     ERR_GENERIC
 }
 
-impl From<IrcResponseCode> for u16 {
-    fn from(value: IrcResponseCode) -> Self {
-        match value {
-            IrcResponseCode::ERR_INVALIDCAPCMD => 410,
-            IrcResponseCode::ERR_UNKNOWNCOMMAND => 421,
-            IrcResponseCode::ERR_NONICKNAMEGIVEN => 431,
-            IrcResponseCode::ERR_NEEDMOREPARAMS => 461,
-            IrcResponseCode::ERR_GENERIC => 999
+impl IrcResponseKind {
+    pub fn to_irc_string(&self) -> &str {
+        match self {
+            IrcResponseKind::Code(code) => match code {
+                IrcResponseCode::RPL_WELCOME => "001",
+                IrcResponseCode::ERR_INVALIDCAPCMD => "410",
+                IrcResponseCode::ERR_UNKNOWNCOMMAND => "421",
+                IrcResponseCode::ERR_NONICKNAMEGIVEN => "431",
+                IrcResponseCode::ERR_NEEDMOREPARAMS => "461",
+                IrcResponseCode::ERR_ALREADYREGISTRED => "462",
+                IrcResponseCode::ERR_GENERIC => "999"
+            }
+            IrcResponseKind::Command(cmd) => cmd
         }
     }
 }

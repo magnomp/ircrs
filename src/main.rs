@@ -17,11 +17,11 @@ async fn main() -> io::Result<()> {
         .expect("Falha ao iniciar servidor");
     println!("Start listening");
     loop {
-        let (socket, _) = listener.accept().await.expect("Falha ao aceitar");
+        let (socket, addr) = listener.accept().await.expect("Falha ao aceitar");
         println!("Accepted");
         let (reader, writer) = split(socket);
 
-        let connection = Connection::new(reader, writer);
+        let connection = Connection::new(reader, writer, addr);
         connection.spawn();
     }
 }

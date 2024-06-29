@@ -1,5 +1,7 @@
+use std::net::SocketAddr;
+
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
+    io::{self, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     net::TcpStream, sync::mpsc,
 };
 
@@ -12,26 +14,31 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new(reader: ReadHalf<TcpStream>, writer: WriteHalf<TcpStream>) -> Self {
-        Connection { reader, writer, client: Client::new() }
+    pub fn new(reader: ReadHalf<TcpStream>, writer: WriteHalf<TcpStream>, client_addr: SocketAddr) -> Self {
+        Connection { reader, writer, client: Client::new(client_addr.ip().to_string()) }
     }
 
-    async fn send_response(&mut self, response: IrcResponse) {
-        self.writer.write(":blablaserver ".as_bytes());
-        match response.kind {
-            crate::reply::IrcResponseKind::Code(code) => self.writer.write(format!("{:0>3}", u16::from(code)).as_bytes()),
-            crate::reply::IrcResponseKind::Command(command) => self.writer.write(command.as_bytes())
-        };        
-        
+    async fn send_response(&mut self, response: &IrcResponse) -> io::Result<()> {
+        print!("> :blablaserver ");
+        self.writer.write(":blablaserver ".as_bytes()).await?;
+        print!("{}", &response.kind.to_irc_string());
+        self.writer.write(&response.kind.to_irc_string().as_bytes()).await?;
+
         for n in 0..response.arguments.len() {
-            self.writer.write(b" ");
+            self.writer.write(b" ").await?;
+            print!(" ");
             if (n == response.arguments.len() - 1) {
-                self.writer.write(b":");
+                print!(":");
+                self.writer.write(b":").await?;
             }
-            self.writer.write(response.arguments[n].as_bytes());
+            print!("{}", response.arguments[n]);
+            self.writer.write(response.arguments[n].as_bytes()).await?;
         }
-        self.writer.write(b"\r\n");
-        self.writer.flush().await;
+        print!("\r\n");
+        self.writer.write(b"\r\n").await?;        
+        self.writer.flush().await?;
+
+        Ok(())
     }
     pub fn spawn(mut self) {
         tokio::spawn(async move {
@@ -45,6 +52,7 @@ impl Connection {
                     }
                     Ok(n) => {
                         if let Ok(new_data) = std::str::from_utf8(&temp_buffer[..n]) {
+                            println!("<{}", new_data);
                             buffer.push_str(new_data)
                         } else {
                             eprintln!("received invalid UTF-8 sequence");
@@ -61,22 +69,20 @@ impl Connection {
                     match parse_message(&buffer) {
                         Ok((remaining, parsed_message)) => {
                             let parsed_len = buffer.len() - remaining.len();
-
-                            println!(
-                                "{} - {:?}",
-                                parsed_message.command, parsed_message.parameters
-                            );
-                            let response: IrcResponse;
+                            
                             match IrcMessage::from_raw(parsed_message) {                                
                                 Ok(message) => {
-                                    response = self.client.handle(&message);
+                                    if let Some(messages) = self.client.handle(&message) {
+                                        for message in messages.iter() {
+                                            self.send_response(message).await;
+                                        }
+                                    }
                                 }
                                 Err(e) => {
-                                    response = e;
+                                    self.send_response(&e).await;
                                 }
                             }        
                             buffer.drain(..parsed_len);       
-                            self.send_response(response);
                         }
                         Err(nom::Err::Incomplete(_)) => {
                             // Incomplete data, wait for more
